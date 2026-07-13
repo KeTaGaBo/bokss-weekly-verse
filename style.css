@@ -1,0 +1,130 @@
+:root {
+  --bg1: #fff9f0;
+  --bg2: #ffe9c7;
+  --card: #ffffff;
+  --ink: #1f2933;
+  --muted: #667085;
+  --gold: #d99a2b;
+  --gold-soft: #fff4dc;
+  --line: #ead8bd;
+  --shadow: 0 18px 45px rgba(31, 41, 51, 0.12);
+  --radius: 28px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at top right, rgba(217, 154, 43, 0.16), transparent 28%),
+    linear-gradient(180deg, var(--bg1), var(--bg2));
+  min-height: 100vh;
+  padding: 24px;
+}
+
+.page {
+  min-height: calc(100vh - 48px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.verse-card {
+  width: 100%;
+  max-width: 760px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 36px 32px;
+  text-align: center;
+}
+
+.badge {
+  display: inline-block;
+  background: var(--gold-soft);
+  color: #8a5a12;
+  border: 1px solid #f1d59d;
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 18px;
+}
+
+h1 {
+  margin: 0 0 26px 0;
+  font-size: 36px;
+  line-height: 1.2;
+}
+
+.verse-box {
+  padding: 26px 20px;
+  border-radius: 22px;
+  background: #fffaf1;
+  border: 1px solid #f0dfc5;
+}
+
+.verse-text {
+  margin: 0;
+  font-size: 30px;
+  line-height: 1.75;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.verse-reference {
+  margin: 18px 0 0 0;
+  font-size: 18px;
+  color: var(--gold);
+  font-weight: 700;
+}
+
+.meta {
+  margin-top: 22px;
+  color: var(--muted);
+  font-size: 14px;
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.footer {
+  margin-top: 24px;
+  color: #7a6b5a;
+  font-size: 13px;
+  text-align: center;
+}
+
+@media (max-width: 720px) {
+  body {
+    padding: 16px;
+  }
+
+  .page {
+    min-height: calc(100vh - 32px);
+  }
+
+  .verse-card {
+    padding: 28px 20px;
+    border-radius: 24px;
+  }
+
+  h1 {
+    font-size: 30px;
+  }
+
+  .verse-text {
+    font-size: 24px;
+  }
+
+  .verse-reference {
+    font-size: 16px;
+  }
+}
