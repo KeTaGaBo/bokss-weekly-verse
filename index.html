@@ -1,12 +1,35 @@
 <!DOCTYPE html>
 <html lang="zh-HK">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BOKSS Weekly Verse</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BOKSS Weekly Verse</title>
+  <meta name="description" content="BOKSS Weekly Verse - 每週金句">
+  <link rel="stylesheet" href="style.css">
+  <script src="app.js" defer></script>
 </head>
 <body>
-    <h1>BOKSS Weekly Verse</h1>
-    <p>Deployment Test Successful</p>
+  <main class="page">
+    <section class="verse-card">
+      <div class="badge">BOKSS Weekly Verse</div>
+
+      <h1>本週金句</h1>
+
+      <div class="verse-box">
+        <p id="verseText" class="verse-text">載入中...</p>
+        <p id="verseReference" class="verse-reference"></p>
+      </div>
+
+      <div class="meta">
+        <span id="weekLabel">本週</span>
+        <span id="updatedLabel"></span>
+      </div>
+    </section>
+
+    <footer class="footer">
+      © 2026 Baptist Oi Kwan Social Service (BOKSS). All rights reserved.
+    </footer>
+  </main>
 </body>
 </html>
+`
