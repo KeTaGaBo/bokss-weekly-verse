@@ -108,7 +108,7 @@ jobs:
             exit 1
           fi
 
-          CURRENT_IMAGE_ITEM_ID=$(echo "$ITEM_BODY" | jq -r '.fields.CurrentIndex')
+          CURRENT_IMAGE_ITEM_ID=$(echo "$ITEM_BODY" | jq -r '.fields.CurrentIndex | tonumber | floor | tostring')
 
           if [ "$CURRENT_IMAGE_ITEM_ID" = "null" ] || [ -z "$CURRENT_IMAGE_ITEM_ID" ]; then
             echo "Current image item ID not found. Expected Graph internal field name: CurrentIndex"
