@@ -164,7 +164,7 @@ jobs:
             exit 1
           fi
 
-          CURRENT_FILE=$(echo "$FILES_BODY" | jq -r --arg currentId "$CURRENT_IMAGE_ITEM_ID" '.value[] | select(.sharepointIds.listItemId == $currentId) | @base64' | head -n 1)
+          CURRENT_FILE=$(echo "$FILES_BODY" | jq -r --arg currentId "$CURRENT_IMAGE_ITEM_ID" '.value[] | select((.sharepointIds.listItemId | tonumber) == ($currentId | tonumber)) | @base64' | head -n 1)
 
           if [ -z "$CURRENT_FILE" ]; then
             echo "Current image file not found for SharePoint item ID: $CURRENT_IMAGE_ITEM_ID"
