@@ -1,0 +1,90 @@
+name: Test SharePoint Attachment Access
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-attachment-access:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Get SharePoint access token
+        run: |
+          TOKEN_RESPONSE=$(curl -s -X POST "https://login.microsoftonline.com/${{ secrets.AZURE_TENANT_ID }}/oauth2/v2.0/token" \
+            -H "Content-Type: application/x-www-form-urlencoded" \
+            -d "client_id=${{ secrets.AZURE_CLIENT_ID }}" \
+            -d "client_secret=${{ secrets.AZURE_CLIENT_SECRET }}" \
+            -d "scope=https://boksshk.sharepoint.com/.default" \
+            -d "grant_type=client_credentials")
+
+          ACCESS_TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r '.access_token')
+
+          if [ "$ACCESS_TOKEN" = "null" ] || [ -z "$ACCESS_TOKEN" ]; then
+            echo "Failed to get SharePoint access token"
+            echo "$TOKEN_RESPONSE"
+            exit 1
+          fi
+
+          echo "ACCESS_TOKEN=$ACCESS_TOKEN" >> "$GITHUB_ENV"
+
+      - name: Read Weekly Verse Settings
+        run: |
+          SETTINGS_RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" \
+            -H "Authorization: Bearer $ACCESS_TOKEN" \
+            -H "Accept: application/json;odata=nometadata" \
+            "https://boksshk.sharepoint.com/sites/WeeklyVerseCMS/_api/web/lists/getbytitle('Weekly%20Verse%20Settings')/items(1)")
+
+          SETTINGS_BODY=$(echo "$SETTINGS_RESPONSE" | sed -n '/HTTP_STATUS/!p')
+          SETTINGS_STATUS=$(echo "$SETTINGS_RESPONSE" | grep HTTP_STATUS | cut -d':' -f2)
+
+          echo "Settings HTTP status: $SETTINGS_STATUS"
+
+          if [ "$SETTINGS_STATUS" != "200" ]; then
+            echo "Failed to read Weekly Verse Settings"
+            echo "$SETTINGS_BODY"
+            exit 1
+          fi
+
+          CURRENT_VERSE_ID=$(echo "$SETTINGS_BODY" | jq -r '.CurrentVerseID')
+
+          if [ "$CURRENT_VERSE_ID" = "null" ] || [ -z "$CURRENT_VERSE_ID" ]; then
+            echo "CurrentVerseID not found"
+            echo "$SETTINGS_BODY"
+            exit 1
+          fi
+
+          echo "CurrentVerseID: $CURRENT_VERSE_ID"
+          echo "CURRENT_VERSE_ID=$CURRENT_VERSE_ID" >> "$GITHUB_ENV"
+
+      - name: List attachments for current verse
+        run: |
+          ATTACHMENTS_RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" \
+            -H "Authorization: Bearer $ACCESS_TOKEN" \
+            -H "Accept: application/json;odata=nometadata" \
+            "https://boksshk.sharepoint.com/sites/WeeklyVerseCMS/_api/web/lists/getbytitle('Weekly%20Verse%20Library')/items($CURRENT_VERSE_ID)/AttachmentFiles")
+
+          ATTACHMENTS_BODY=$(echo "$ATTACHMENTS_RESPONSE" | sed -n '/HTTP_STATUS/!p')
+          ATTACHMENTS_STATUS=$(echo "$ATTACHMENTS_RESPONSE" | grep HTTP_STATUS | cut -d':' -f2)
+
+          echo "Attachments HTTP status: $ATTACHMENTS_STATUS"
+
+          if [ "$ATTACHMENTS_STATUS" != "200" ]; then
+            echo "Failed to list attachments"
+            echo "$ATTACHMENTS_BODY"
+            exit 1
+          fi
+
+          ATTACHMENT_COUNT=$(echo "$ATTACHMENTS_BODY" | jq '.value | length')
+          echo "Attachment count: $ATTACHMENT_COUNT"
+
+          if [ "$ATTACHMENT_COUNT" = "0" ]; then
+            echo "No attachment found for current verse"
+            echo "$ATTACHMENTS_BODY"
+            exit 1
+          fi
+
+          FILE_NAME=$(echo "$ATTACHMENTS_BODY" | jq -r '.value[0].FileName')
+          SERVER_RELATIVE_URL=$(echo "$ATTACHMENTS_BODY" | jq -r '.value[0].ServerRelativeUrl')
+
+          echo "Attachment file name: $FILE_NAME"
+          echo "Attachment server relative URL: $SERVER_RELATIVE_URL"
