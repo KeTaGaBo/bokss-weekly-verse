@@ -1,0 +1,251 @@
+name: Publish Weekly Verse
+
+on:
+  workflow_dispatch:
+  repository_dispatch:
+    types:
+      - publish-weekly-verse
+
+permissions:
+  contents: write
+
+jobs:
+  publish-weekly-verse:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Get Microsoft Graph access token
+        run: |
+          TOKEN_RESPONSE=$(curl -s -X POST "https://login.microsoftonline.com/${{ secrets.AZURE_TENANT_ID }}/oauth2/v2.0/token" \
+            -H "Content-Type: application/x-www-form-urlencoded" \
+            -d "client_id=${{ secrets.AZURE_CLIENT_ID }}" \
+            -d "client_secret=${{ secrets.AZURE_CLIENT_SECRET }}" \
+            -d "scope=https://graph.microsoft.com/.default" \
+            -d "grant_type=client_credentials")
+
+          ACCESS_TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r '.access_token')
+
+          if [ "$ACCESS_TOKEN" = "null" ] || [ -z "$ACCESS_TOKEN" ]; then
+            echo "Failed to get Microsoft Graph access token"
+            echo "$TOKEN_RESPONSE"
+            exit 1
+          fi
+
+          echo "ACCESS_TOKEN=$ACCESS_TOKEN" >> "$GITHUB_ENV"
+
+      - name: Get WeeklyVerseCMS site id
+        run: |
+          SITE_RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" \
+            -H "Authorization: Bearer $ACCESS_TOKEN" \
+            "https://graph.microsoft.com/v1.0/sites/boksshk.sharepoint.com:/sites/WeeklyVerseCMS")
+
+          SITE_BODY=$(echo "$SITE_RESPONSE" | sed -n '/HTTP_STATUS/!p')
+          SITE_STATUS=$(echo "$SITE_RESPONSE" | grep HTTP_STATUS | cut -d':' -f2)
+
+          echo "Site HTTP status: $SITE_STATUS"
+
+          if [ "$SITE_STATUS" != "200" ]; then
+            echo "Failed to get WeeklyVerseCMS site id"
+            echo "$SITE_BODY"
+            exit 1
+          fi
+
+          SITE_ID=$(echo "$SITE_BODY" | jq -r '.id')
+
+          if [ "$SITE_ID" = "null" ] || [ -z "$SITE_ID" ]; then
+            echo "Site id not found"
+            echo "$SITE_BODY"
+            exit 1
+          fi
+
+          echo "SITE_ID=$SITE_ID" >> "$GITHUB_ENV"
+
+      - name: Find Weekly Verse Settings list
+        run: |
+          LISTS_RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" \
+            -H "Authorization: Bearer $ACCESS_TOKEN" \
+            "https://graph.microsoft.com/v1.0/sites/$SITE_ID/lists")
+
+          LISTS_BODY=$(echo "$LISTS_RESPONSE" | sed -n '/HTTP_STATUS/!p')
+          LISTS_STATUS=$(echo "$LISTS_RESPONSE" | grep HTTP_STATUS | cut -d':' -f2)
+
+          echo "Lists HTTP status: $LISTS_STATUS"
+
+          if [ "$LISTS_STATUS" != "200" ]; then
+            echo "Failed to list SharePoint lists"
+            echo "$LISTS_BODY"
+            exit 1
+          fi
+
+          SETTINGS_LIST_ID=$(echo "$LISTS_BODY" | jq -r '.value[] | select(.displayName=="Weekly Verse Settings") | .id')
+
+          if [ "$SETTINGS_LIST_ID" = "null" ] || [ -z "$SETTINGS_LIST_ID" ]; then
+            echo "Weekly Verse Settings list not found"
+            echo "Available lists:"
+            echo "$LISTS_BODY" | jq -r '.value[] | .displayName'
+            exit 1
+          fi
+
+          echo "SETTINGS_LIST_ID=$SETTINGS_LIST_ID" >> "$GITHUB_ENV"
+
+      - name: Read GlobalSettings
+        run: |
+          ITEM_RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" \
+            -H "Authorization: Bearer $ACCESS_TOKEN" \
+            "https://graph.microsoft.com/v1.0/sites/$SITE_ID/lists/$SETTINGS_LIST_ID/items/1?expand=fields")
+
+          ITEM_BODY=$(echo "$ITEM_RESPONSE" | sed -n '/HTTP_STATUS/!p')
+          ITEM_STATUS=$(echo "$ITEM_RESPONSE" | grep HTTP_STATUS | cut -d':' -f2)
+
+          echo "Settings item HTTP status: $ITEM_STATUS"
+
+          if [ "$ITEM_STATUS" != "200" ]; then
+            echo "Failed to read GlobalSettings"
+            echo "$ITEM_BODY"
+            exit 1
+          fi
+
+          CURRENT_IMAGE_ITEM_ID=$(echo "$ITEM_BODY" | jq -r '.fields.CurrentIndex')
+
+          if [ "$CURRENT_IMAGE_ITEM_ID" = "null" ] || [ -z "$CURRENT_IMAGE_ITEM_ID" ]; then
+            echo "Current image item ID not found. Expected Graph internal field name: CurrentIndex"
+            echo "$ITEM_BODY" | jq '.fields'
+            exit 1
+          fi
+
+          echo "Current image item ID: $CURRENT_IMAGE_ITEM_ID"
+          echo "CURRENT_IMAGE_ITEM_ID=$CURRENT_IMAGE_ITEM_ID" >> "$GITHUB_ENV"
+
+      - name: Find Weekly Verse Images document library
+        run: |
+          DRIVES_RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" \
+            -H "Authorization: Bearer $ACCESS_TOKEN" \
+            "https://graph.microsoft.com/v1.0/sites/$SITE_ID/drives")
+
+          DRIVES_BODY=$(echo "$DRIVES_RESPONSE" | sed -n '/HTTP_STATUS/!p')
+          DRIVES_STATUS=$(echo "$DRIVES_RESPONSE" | grep HTTP_STATUS | cut -d':' -f2)
+
+          echo "Drives HTTP status: $DRIVES_STATUS"
+
+          if [ "$DRIVES_STATUS" != "200" ]; then
+            echo "Failed to list document libraries"
+            echo "$DRIVES_BODY"
+            exit 1
+          fi
+
+          DRIVE_ID=$(echo "$DRIVES_BODY" | jq -r '.value[] | select(.name=="Weekly Verse Images") | .id')
+
+          if [ "$DRIVE_ID" = "null" ] || [ -z "$DRIVE_ID" ]; then
+            echo "Weekly Verse Images document library not found"
+            echo "Available libraries:"
+            echo "$DRIVES_BODY" | jq -r '.value[] | .name'
+            exit 1
+          fi
+
+          echo "DRIVE_ID=$DRIVE_ID" >> "$GITHUB_ENV"
+
+      - name: Find current image file
+        run: |
+          FILES_RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" \
+            -H "Authorization: Bearer $ACCESS_TOKEN" \
+            "https://graph.microsoft.com/v1.0/drives/$DRIVE_ID/root/children?\$select=id,name,file,createdDateTime,lastModifiedDateTime,size,webUrl,sharepointIds")
+
+          FILES_BODY=$(echo "$FILES_RESPONSE" | sed -n '/HTTP_STATUS/!p')
+          FILES_STATUS=$(echo "$FILES_RESPONSE" | grep HTTP_STATUS | cut -d':' -f2)
+
+          echo "Files HTTP status: $FILES_STATUS"
+
+          if [ "$FILES_STATUS" != "200" ]; then
+            echo "Failed to list image files"
+            echo "$FILES_BODY"
+            exit 1
+          fi
+
+          CURRENT_FILE=$(echo "$FILES_BODY" | jq -r --arg currentId "$CURRENT_IMAGE_ITEM_ID" '.value[] | select(.sharepointIds.listItemId == $currentId) | @base64' | head -n 1)
+
+          if [ -z "$CURRENT_FILE" ]; then
+            echo "Current image file not found for SharePoint item ID: $CURRENT_IMAGE_ITEM_ID"
+            echo "Available files:"
+            echo "$FILES_BODY" | jq -r '.value[] | "\(.name) | listItemId=\(.sharepointIds.listItemId)"'
+            exit 1
+          fi
+
+          CURRENT_FILE_ID=$(echo "$CURRENT_FILE" | base64 -d | jq -r '.id')
+          CURRENT_FILE_NAME=$(echo "$CURRENT_FILE" | base64 -d | jq -r '.name')
+          CURRENT_FILE_WEB_URL=$(echo "$CURRENT_FILE" | base64 -d | jq -r '.webUrl')
+          CURRENT_FILE_CREATED=$(echo "$CURRENT_FILE" | base64 -d | jq -r '.createdDateTime')
+
+          echo "Current file name: $CURRENT_FILE_NAME"
+          echo "CURRENT_FILE_ID=$CURRENT_FILE_ID" >> "$GITHUB_ENV"
+          echo "CURRENT_FILE_NAME=$CURRENT_FILE_NAME" >> "$GITHUB_ENV"
+          echo "CURRENT_FILE_WEB_URL=$CURRENT_FILE_WEB_URL" >> "$GITHUB_ENV"
+          echo "CURRENT_FILE_CREATED=$CURRENT_FILE_CREATED" >> "$GITHUB_ENV"
+
+      - name: Download current image
+        run: |
+          mkdir -p images data
+
+          DOWNLOAD_STATUS=$(curl -s -L -w "%{http_code}" \
+            -H "Authorization: Bearer $ACCESS_TOKEN" \
+            "https://graph.microsoft.com/v1.0/drives/$DRIVE_ID/items/$CURRENT_FILE_ID/content" \
+            -o images/current-verse.jpg)
+
+          echo "Download HTTP status: $DOWNLOAD_STATUS"
+
+          if [ "$DOWNLOAD_STATUS" != "200" ]; then
+            echo "Failed to download current image"
+            exit 1
+          fi
+
+          if [ ! -s images/current-verse.jpg ]; then
+            echo "Downloaded image is empty"
+            exit 1
+          fi
+
+      - name: Write current verse metadata
+        run: |
+          UPDATED_AT=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+          jq -n \
+            --arg title "$CURRENT_FILE_NAME" \
+            --arg imageUrl "/images/current-verse.jpg" \
+            --arg updatedAt "$UPDATED_AT" \
+            --arg sourceFileName "$CURRENT_FILE_NAME" \
+            --arg sharePointItemId "$CURRENT_IMAGE_ITEM_ID" \
+            --arg sharePointCreated "$CURRENT_FILE_CREATED" \
+            '{
+              title: $title,
+              imageUrl: $imageUrl,
+              updatedAt: $updatedAt,
+              sourceFileName: $sourceFileName,
+              sharePointItemId: $sharePointItemId,
+              sharePointCreated: $sharePointCreated
+            }' > data/current-verse.json
+
+          cat data/current-verse.json
+
+      - name: Commit updated weekly verse files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add images/current-verse.jpg data/current-verse.json
+
+          if git diff --cached --quiet; then
+            echo "No weekly verse file changes to commit"
+          else
+            git commit -m "Publish weekly verse"
+          fi
+
+      - name: Deploy to Azure Static Web Apps
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_PROUD_WAVE_030A1C800 }}
+          action: "upload"
+          app_location: "/"
+          api_location: ""
+          output_location: ""
+          skip_app_build: true
