@@ -1,62 +1,55 @@
-async function loadVerses() {
+async function loadCurrentVerse() {
+  const statusText = document.getElementById("statusText");
+  const verseImage = document.getElementById("verseImage");
+
   try {
-    const response = await fetch("verses.json", { cache: "no-store" });
+    const response = await fetch("data/current-verse.json", {
+      cache: "no-store"
+    });
 
     if (!response.ok) {
-      throw new Error("Unable to load verses.json");
+      throw new Error("Unable to load current-verse.json");
     }
 
     const data = await response.json();
 
-    const settings = data.settings || {};
-    const verses = Array.isArray(data.verses) ? data.verses : [];
+    const imageUrl = data.imageUrl || "images/current-verse.jpg";
+    const updatedAt = data.updatedAt || "";
+    const title = data.title || "本週金句";
 
-    const activeVerses = verses.filter(item => item.isActive !== false);
+    const cacheBuster = updatedAt
+      ? encodeURIComponent(updatedAt)
+      : String(Date.now());
 
-    if (!activeVerses.length) {
-      showFallbackVerse();
-      return;
+    verseImage.src = `${imageUrl}?v=${cacheBuster}`;
+    verseImage.alt = title;
+
+    if (updatedAt) {
+      statusText.textContent = `最後更新：${formatDateTime(updatedAt)}`;
+    } else {
+      statusText.textContent = "本週金句";
     }
-
-    const selectedVerse = getCurrentVerse(activeVerses, settings);
-
-    document.getElementById("verseText").textContent = `「${selectedVerse.verseText}」`;
-    document.getElementById("verseReference").textContent = selectedVerse.reference || "";
-    document.getElementById("updatedLabel").textContent = getDisplayMonth();
-
   } catch (error) {
-    console.error(error);
-    showFallbackVerse();
+    console.error("Failed to load current verse:", error);
+
+    verseImage.src = `images/current-verse.jpg?v=${Date.now()}`;
+    verseImage.alt = "本週金句";
+    statusText.textContent = "本週金句";
   }
 }
 
-function getCurrentVerse(verses, settings) {
-  const rotationDays = Number(settings.rotationDays || 7);
-  const startDateText = settings.startDate || "2026-01-01";
+function formatDateTime(value) {
+  const date = new Date(value);
 
-  const startDate = new Date(startDateText + "T00:00:00");
-  const today = new Date();
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
 
-  const diffMs = today.getTime() - startDate.getTime();
-  const diffDays = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
 
-  const cycle = Math.floor(diffDays / rotationDays);
-  const index = cycle % verses.length;
-
-  return verses[index];
+  return `${year}-${month}-${day}`;
 }
 
-function getDisplayMonth() {
-  const today = new Date();
-  const year = today.getFullYear();
-  const month = String(today.getMonth() + 1).padStart(2, "0");
-  return `${year}-${month}`;
-}
-
-function showFallbackVerse() {
-  document.getElementById("verseText").textContent = "「你要專心仰賴耶和華，不可倚靠自己的聰明。」";
-  document.getElementById("verseReference").textContent = "箴言 3:5";
-  document.getElementById("updatedLabel").textContent = getDisplayMonth();
-}
-
-document.addEventListener("DOMContentLoaded", loadVerses);
+document.addEventListener("DOMContentLoaded", loadCurrentVerse);
